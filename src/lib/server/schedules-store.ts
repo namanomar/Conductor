@@ -3,6 +3,7 @@ import { getDb, collections } from "./mongodb";
 
 export interface ScheduleDoc {
   _id: ObjectId;
+  userId: string;
   workflowId: string;
   workflowName: string;
   intervalMinutes: number;
@@ -38,19 +39,14 @@ function toPublic(doc: ScheduleDoc): SchedulePublic {
   };
 }
 
-export async function listSchedules(): Promise<SchedulePublic[]> {
+export async function getScheduleForWorkflow(userId: string, workflowId: string): Promise<SchedulePublic | null> {
   const db = await getDb();
-  const docs = await db.collection<ScheduleDoc>(collections.schedules).find().toArray();
-  return docs.map(toPublic);
-}
-
-export async function getScheduleForWorkflow(workflowId: string): Promise<SchedulePublic | null> {
-  const db = await getDb();
-  const doc = await db.collection<ScheduleDoc>(collections.schedules).findOne({ workflowId });
+  const doc = await db.collection<ScheduleDoc>(collections.schedules).findOne({ userId, workflowId });
   return doc ? toPublic(doc) : null;
 }
 
 export async function upsertSchedule(
+  userId: string,
   workflowId: string,
   workflowName: string,
   intervalMinutes: number
@@ -60,7 +56,7 @@ export async function upsertSchedule(
   const nextRunAt = new Date(now.getTime() + intervalMinutes * 60_000).toISOString();
 
   await db.collection<ScheduleDoc>(collections.schedules).updateOne(
-    { workflowId },
+    { userId, workflowId },
     {
       $set: {
         workflowName,
@@ -69,25 +65,25 @@ export async function upsertSchedule(
         nextRunAt,
         updatedAt: now.toISOString(),
       },
-      $setOnInsert: { workflowId, createdAt: now.toISOString() },
+      $setOnInsert: { userId, workflowId, createdAt: now.toISOString() },
     },
     { upsert: true }
   );
 
-  const doc = await db.collection<ScheduleDoc>(collections.schedules).findOne({ workflowId });
+  const doc = await db.collection<ScheduleDoc>(collections.schedules).findOne({ userId, workflowId });
   return toPublic(doc!);
 }
 
-export async function setScheduleEnabled(workflowId: string, enabled: boolean): Promise<void> {
+export async function setScheduleEnabled(userId: string, workflowId: string, enabled: boolean): Promise<void> {
   const db = await getDb();
   await db
     .collection<ScheduleDoc>(collections.schedules)
-    .updateOne({ workflowId }, { $set: { enabled, updatedAt: new Date().toISOString() } });
+    .updateOne({ userId, workflowId }, { $set: { enabled, updatedAt: new Date().toISOString() } });
 }
 
-export async function deleteSchedule(workflowId: string): Promise<void> {
+export async function deleteSchedule(userId: string, workflowId: string): Promise<void> {
   const db = await getDb();
-  await db.collection(collections.schedules).deleteOne({ workflowId });
+  await db.collection(collections.schedules).deleteOne({ userId, workflowId });
 }
 
 export async function findDueSchedules(): Promise<ScheduleDoc[]> {

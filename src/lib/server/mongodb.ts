@@ -34,4 +34,5 @@ export const collections = {
   workflows: "workflows",
   runs: "runs",
   schedules: "schedules",
+  users: "users",
 } as const;

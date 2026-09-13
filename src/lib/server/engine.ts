@@ -37,11 +37,11 @@ async function setNode(runId: string, nodeId: string, status: NodeRunStatus, log
   emitRunUpdate(runId);
 }
 
-async function runInvestigate(runId: string, node: WorkflowNode, keyword: string) {
+async function runInvestigate(userId: string, runId: string, node: WorkflowNode, keyword: string) {
   const app = appFromIcon(node.data.icon);
   if (!app) return setNode(runId, node.id, "error", "No app configured for this investigate step");
   try {
-    const { doc, token, jiraAuth } = await resolveConnection(app);
+    const { doc, token, jiraAuth } = await resolveConnection(userId, app);
     if (app === "slack") {
       if (node.data.capability === "list_channels") {
         const channels = await slackListChannels(token);
@@ -66,7 +66,7 @@ async function runInvestigate(runId: string, node: WorkflowNode, keyword: string
   }
 }
 
-async function runTrigger(runId: string, node: WorkflowNode) {
+async function runTrigger(userId: string, runId: string, node: WorkflowNode) {
   // Only a PagerDuty-style trigger (icon "alert") actually checks PagerDuty —
   // any other trigger (e.g. a Slack-themed one from a generated workflow) has
   // no real event source wired up yet, so it just starts the run honestly
@@ -75,7 +75,7 @@ async function runTrigger(runId: string, node: WorkflowNode) {
     return setNode(runId, node.id, "success", "Manual trigger — starting the workflow now", null);
   }
   try {
-    const { doc, token } = await resolveConnection("pagerduty");
+    const { doc, token } = await resolveConnection(userId, "pagerduty");
     const incidents = await pagerdutyOpenIncidents(token, doc.config || undefined);
     if (!incidents.length) {
       return setNode(runId, node.id, "success", "PagerDuty connected — no open incidents right now", null);
@@ -141,13 +141,18 @@ async function runApproval(runId: string, node: WorkflowNode) {
   await setNode(runId, node.id, "success", "Approved by operator");
 }
 
-async function runAction(runId: string, node: WorkflowNode, reasonOutput: Record<string, unknown> | undefined) {
+async function runAction(
+  userId: string,
+  runId: string,
+  node: WorkflowNode,
+  reasonOutput: Record<string, unknown> | undefined
+) {
   const app = appFromIcon(node.data.icon);
   if (!app) return setNode(runId, node.id, "error", "No app configured for this action");
   const fallback = `Automated action from Conductor: ${node.data.label}`;
 
   try {
-    const { doc, token, jiraAuth } = await resolveConnection(app);
+    const { doc, token, jiraAuth } = await resolveConnection(userId, app);
     if (app === "slack") {
       if (!doc.config) throw new Error("Set a Channel ID in Connections first");
       const text = (reasonOutput?.slackMessage as string) || fallback;
@@ -175,7 +180,7 @@ async function runAction(runId: string, node: WorkflowNode, reasonOutput: Record
   }
 }
 
-async function runToolNode(runId: string, node: WorkflowNode) {
+async function runToolNode(userId: string, runId: string, node: WorkflowNode) {
   const { sourceId, toolName } = node.data;
   if (!sourceId || !toolName) {
     return setNode(runId, node.id, "error", "This tool node is missing its source/tool identity");
@@ -183,20 +188,25 @@ async function runToolNode(runId: string, node: WorkflowNode) {
   try {
     // No per-node argument configuration exists yet — tools that require
     // arguments will surface that as a clear error here rather than guessing.
-    const result = await callMcpSourceTool(sourceId, toolName, {});
+    const result = await callMcpSourceTool(userId, sourceId, toolName, {});
     return setNode(runId, node.id, "success", `Called ${toolName}`, result);
   } catch (err) {
     return setNode(runId, node.id, "error", err instanceof Error ? err.message : "Tool call failed");
   }
 }
 
-async function runVerify(runId: string, node: WorkflowNode, actionOutputs: { app: AppIcon; output: unknown }[]) {
+async function runVerify(
+  userId: string,
+  runId: string,
+  node: WorkflowNode,
+  actionOutputs: { app: AppIcon; output: unknown }[]
+) {
   const results: string[] = [];
   let allOk = actionOutputs.length > 0;
 
   for (const { app, output } of actionOutputs) {
     try {
-      const { doc, token, jiraAuth } = await resolveConnection(app);
+      const { doc, token, jiraAuth } = await resolveConnection(userId, app);
       let ok = false;
       if (app === "slack" && doc.config) {
         ok = await slackVerifyMessage(token, doc.config, (output as { ts: string }).ts);
@@ -220,7 +230,7 @@ export async function executeWorkflow(runId: string) {
   const run = await getRun(runId);
   if (!run) return;
 
-  const { nodes, edges } = run;
+  const { userId, nodes, edges } = run;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const predecessorsOf = (id: string) => edges.filter((e: Edge) => e.target === id).map((e) => e.source);
   const successorsOf = (id: string) => edges.filter((e: Edge) => e.source === id).map((e) => e.target);
@@ -265,11 +275,11 @@ export async function executeWorkflow(runId: string) {
         await setNode(runId, nodeId, "running");
         const kind = node.data.kind as WorkflowNodeKind;
 
-        if (kind === "trigger") await runTrigger(runId, node);
+        if (kind === "trigger") await runTrigger(userId, runId, node);
         else if (kind === "investigate") {
           const runDoc = await getRun(runId);
           const keyword = runDoc ? getIncidentKeyword(runDoc) : "";
-          await runInvestigate(runId, node, keyword);
+          await runInvestigate(userId, runId, node, keyword);
         } else if (kind === "reason") {
           const runDoc = await getRun(runId);
           const predOutputs = preds.map((p) => runDoc?.nodeStates[p]?.output).filter(Boolean);
@@ -281,8 +291,8 @@ export async function executeWorkflow(runId: string) {
           const reasonOutput = findUpstreamOutput(nodeId, "reason", runDoc) as
             | Record<string, unknown>
             | undefined;
-          await runAction(runId, node, reasonOutput);
-        } else if (kind === "tool") await runToolNode(runId, node);
+          await runAction(userId, runId, node, reasonOutput);
+        } else if (kind === "tool") await runToolNode(userId, runId, node);
         else if (kind === "verify") {
           const runDoc = await getRun(runId);
           const visited = new Set<string>();
@@ -303,7 +313,7 @@ export async function executeWorkflow(runId: string) {
               output: runDoc?.nodeStates[n.id]?.output,
             }))
             .filter((x) => x.app && x.output);
-          await runVerify(runId, node, actionOutputs);
+          await runVerify(userId, runId, node, actionOutputs);
         }
 
         const after = await getRun(runId);

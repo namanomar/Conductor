@@ -3,6 +3,7 @@ import { parseAppId } from "@/lib/server/app-id";
 import { providers, redirectUriFor } from "@/lib/server/providers";
 import { env } from "@/lib/server/env";
 import { saveCredential } from "@/lib/server/connections-store";
+import { requireUserId } from "@/lib/server/current-user";
 import { githubValidate } from "@/lib/server/connectors/github";
 import { slackValidate } from "@/lib/server/connectors/slack";
 import { jiraAccessibleResources, jiraAuthFromOAuth, jiraValidate } from "@/lib/server/connectors/jira";
@@ -42,6 +43,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ app: str
   const redirectUri = redirectUriFor(app);
 
   try {
+    const userId = await requireUserId();
+
     if (app === "github") {
       const clientId = env.github.clientId();
       const clientSecret = env.github.clientSecret();
@@ -54,7 +57,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ app: str
       const data = await res.json();
       if (!data.access_token) return fail(app, data.error_description || "GitHub token exchange failed");
       const who = await githubValidate(data.access_token);
-      await saveCredential(app, { type: "oauth", accessToken: data.access_token, meta: { login: who.login } });
+      await saveCredential(userId, app, { type: "oauth", accessToken: data.access_token, meta: { login: who.login } });
       return ok(app);
     }
 
@@ -73,7 +76,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ app: str
       if (!data.ok) return fail(app, data.error || "Slack token exchange failed");
       const token = data.access_token as string;
       const who = await slackValidate(token);
-      await saveCredential(app, { type: "oauth", accessToken: token, meta: { team: who.team } });
+      await saveCredential(userId, app, { type: "oauth", accessToken: token, meta: { team: who.team } });
       return ok(app);
     }
 
@@ -96,7 +99,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ app: str
       if (!data.access_token) return fail(app, data.error_description || "Jira token exchange failed");
       const site = await jiraAccessibleResources(data.access_token);
       await jiraValidate(jiraAuthFromOAuth(data.access_token, site.id));
-      await saveCredential(app, {
+      await saveCredential(userId, app, {
         type: "oauth",
         accessToken: data.access_token,
         refreshToken: data.refresh_token,

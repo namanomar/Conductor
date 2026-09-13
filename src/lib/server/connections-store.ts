@@ -11,7 +11,9 @@ export interface ConnectionCredential {
 }
 
 export interface ConnectionDoc {
-  _id: AppId;
+  _id: string; // `${userId}:${app}`
+  userId: string;
+  app: AppId;
   connected: boolean;
   mode: ConnectionMode;
   dataMode: DataMode;
@@ -31,9 +33,13 @@ export interface ConnectionPublic {
   lastSyncedAt?: string;
 }
 
+function docId(userId: string, app: AppId): string {
+  return `${userId}:${app}`;
+}
+
 function toPublic(doc: ConnectionDoc): ConnectionPublic {
   return {
-    id: doc._id,
+    id: doc.app,
     connected: doc.connected,
     mode: doc.mode,
     dataMode: doc.dataMode,
@@ -43,23 +49,24 @@ function toPublic(doc: ConnectionDoc): ConnectionPublic {
   };
 }
 
-export async function getConnection(app: AppId): Promise<ConnectionDoc | null> {
+export async function getConnection(userId: string, app: AppId): Promise<ConnectionDoc | null> {
   const db = await getDb();
-  return db.collection<ConnectionDoc>(collections.connections).findOne({ _id: app });
+  return db.collection<ConnectionDoc>(collections.connections).findOne({ _id: docId(userId, app) });
 }
 
-export async function getConnectionPublic(app: AppId): Promise<ConnectionPublic | null> {
-  const doc = await getConnection(app);
+export async function getConnectionPublic(userId: string, app: AppId): Promise<ConnectionPublic | null> {
+  const doc = await getConnection(userId, app);
   return doc ? toPublic(doc) : null;
 }
 
-export async function listConnectionsPublic(): Promise<ConnectionPublic[]> {
+export async function listConnectionsPublic(userId: string): Promise<ConnectionPublic[]> {
   const db = await getDb();
-  const docs = await db.collection<ConnectionDoc>(collections.connections).find().toArray();
+  const docs = await db.collection<ConnectionDoc>(collections.connections).find({ userId }).toArray();
   return docs.map(toPublic);
 }
 
 export async function upsertConnectionSettings(
+  userId: string,
   app: AppId,
   patch: Partial<Pick<ConnectionDoc, "mode" | "dataMode" | "config">>
 ): Promise<void> {
@@ -73,18 +80,19 @@ export async function upsertConnectionSettings(
   if (patch.dataMode !== undefined) set.dataMode = patch.dataMode;
   if (patch.config !== undefined) set.config = patch.config;
 
-  const setOnInsert: Record<string, unknown> = { connected: false };
+  const setOnInsert: Record<string, unknown> = { userId, app, connected: false };
   if (set.mode === undefined) setOnInsert.mode = "direct";
   if (set.dataMode === undefined) setOnInsert.dataMode = "live";
 
   await db.collection<ConnectionDoc>(collections.connections).updateOne(
-    { _id: app },
+    { _id: docId(userId, app) },
     { $set: set, $setOnInsert: setOnInsert },
     { upsert: true }
   );
 }
 
 export async function saveCredential(
+  userId: string,
   app: AppId,
   credential: {
     type: ConnectionCredential["type"];
@@ -101,27 +109,27 @@ export async function saveCredential(
     meta: credential.meta,
   };
   await db.collection<ConnectionDoc>(collections.connections).updateOne(
-    { _id: app },
+    { _id: docId(userId, app) },
     {
       $set: { connected: true, credential: doc, updatedAt: new Date().toISOString() },
-      $setOnInsert: { mode: "direct", dataMode: "live" },
+      $setOnInsert: { userId, app, mode: "direct", dataMode: "live" },
     },
     { upsert: true }
   );
 }
 
-export async function disconnectApp(app: AppId): Promise<void> {
+export async function disconnectApp(userId: string, app: AppId): Promise<void> {
   const db = await getDb();
   await db.collection<ConnectionDoc>(collections.connections).updateOne(
-    { _id: app },
+    { _id: docId(userId, app) },
     { $set: { connected: false, updatedAt: new Date().toISOString() }, $unset: { credential: "" } }
   );
 }
 
-export async function markSynced(app: AppId): Promise<void> {
+export async function markSynced(userId: string, app: AppId): Promise<void> {
   const db = await getDb();
   await db.collection<ConnectionDoc>(collections.connections).updateOne(
-    { _id: app },
+    { _id: docId(userId, app) },
     { $set: { lastSyncedAt: new Date().toISOString() } }
   );
 }

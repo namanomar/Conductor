@@ -17,6 +17,7 @@ export type RunStatus = "running" | "awaiting_approval" | "completed" | "failed"
 
 export interface RunDoc {
   _id: ObjectId;
+  userId: string;
   workflowName: string;
   nodes: WorkflowNode[];
   edges: Edge[];
@@ -26,13 +27,14 @@ export interface RunDoc {
   updatedAt: string;
 }
 
-export async function createRun(name: string, nodes: WorkflowNode[], edges: Edge[]) {
+export async function createRun(userId: string, name: string, nodes: WorkflowNode[], edges: Edge[]) {
   const db = await getDb();
   const now = new Date().toISOString();
   const nodeStates: Record<string, NodeState> = {};
   for (const n of nodes) nodeStates[n.id] = { status: "idle", log: [] };
 
   const result = await db.collection<Omit<RunDoc, "_id">>(collections.runs).insertOne({
+    userId,
     workflowName: name,
     nodes,
     edges,
@@ -47,6 +49,16 @@ export async function createRun(name: string, nodes: WorkflowNode[], edges: Edge
 export async function getRun(id: string): Promise<RunDoc | null> {
   const db = await getDb();
   return db.collection<RunDoc>(collections.runs).findOne({ _id: new ObjectId(id) });
+}
+
+export async function listRuns(userId: string) {
+  const db = await getDb();
+  return db
+    .collection<RunDoc>(collections.runs)
+    .find({ userId }, { projection: { nodes: 0, edges: 0 } })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .toArray();
 }
 
 export async function patchRun(id: string, patch: Partial<Pick<RunDoc, "status">>) {

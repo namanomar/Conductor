@@ -100,50 +100,54 @@ export interface ToolCallResult {
   error?: string;
 }
 
-export async function executeChatTool(name: string, args: Record<string, unknown>): Promise<ToolCallResult> {
+export async function executeChatTool(
+  userId: string,
+  name: string,
+  args: Record<string, unknown>
+): Promise<ToolCallResult> {
   try {
     switch (name) {
       case "list_connections": {
-        const connections = await listConnectionsPublic();
+        const connections = await listConnectionsPublic(userId);
         return { ok: true, data: connections };
       }
       case "pagerduty_list_incidents": {
-        const { doc, token } = await resolveConnection("pagerduty");
+        const { doc, token } = await resolveConnection(userId, "pagerduty");
         const incidents = await pagerdutyOpenIncidents(token, doc.config || undefined);
         return { ok: true, data: incidents };
       }
       case "slack_search": {
-        const { doc, token } = await resolveConnection("slack");
+        const { doc, token } = await resolveConnection(userId, "slack");
         if (!doc.config) throw new Error("Set a Channel ID for Slack in Connections first");
         const messages = await slackSearchChannel(token, doc.config, String(args.keyword ?? ""));
         return { ok: true, data: messages };
       }
       case "slack_post_message": {
-        const { doc, token } = await resolveConnection("slack");
+        const { doc, token } = await resolveConnection(userId, "slack");
         if (!doc.config) throw new Error("Set a Channel ID for Slack in Connections first");
         const res = await slackPostMessage(token, doc.config, String(args.text ?? ""));
         return { ok: true, data: res };
       }
       case "github_search_prs": {
-        const { doc, token } = await resolveConnection("github");
+        const { doc, token } = await resolveConnection(userId, "github");
         if (!doc.config) throw new Error("Set a Repository for GitHub in Connections first");
         const prs = await githubSearchRecentPRs(token, doc.config);
         return { ok: true, data: prs };
       }
       case "github_create_issue": {
-        const { doc, token } = await resolveConnection("github");
+        const { doc, token } = await resolveConnection(userId, "github");
         if (!doc.config) throw new Error("Set a Repository for GitHub in Connections first");
         const res = await githubCreateIssue(token, doc.config, String(args.title ?? ""), String(args.body ?? ""));
         return { ok: true, data: res };
       }
       case "jira_search_issues": {
-        const { doc, jiraAuth } = await resolveConnection("jira");
+        const { doc, jiraAuth } = await resolveConnection(userId, "jira");
         if (!doc.config || !jiraAuth) throw new Error("Set a Project key for Jira in Connections first");
         const issues = await jiraSearchProjectIssues(jiraAuth, doc.config);
         return { ok: true, data: issues };
       }
       case "jira_create_issue": {
-        const { doc, jiraAuth } = await resolveConnection("jira");
+        const { doc, jiraAuth } = await resolveConnection(userId, "jira");
         if (!doc.config || !jiraAuth) throw new Error("Set a Project key for Jira in Connections first");
         const res = await jiraCreateIssue(jiraAuth, doc.config, String(args.summary ?? ""), String(args.description ?? ""));
         return { ok: true, data: res };

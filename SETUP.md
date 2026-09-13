@@ -39,6 +39,18 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 Put the result in `.env.local` as `TOKEN_ENCRYPTION_KEY`.
 
+## 3b. Accounts
+
+Conductor is multi-tenant: each person creates an account (username + password, no email) at `/login`,
+and everything they build or connect — connections, custom connections, workflows, runs, schedules —
+is scoped to their account only. Two users can share the same GitHub/Slack/Jira OAuth app (same
+`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, etc.) but each authorizes it separately and gets their own
+token; one user connecting an app never makes it appear connected for anyone else.
+
+Generate a session-signing secret the same way as above and put it in `.env.local` as `SESSION_SECRET`
+(if omitted, it falls back to `TOKEN_ENCRYPTION_KEY`, but a distinct value is recommended). Sessions are
+a signed, httpOnly cookie valid for 30 days; there's no separate session store.
+
 ## 4. OpenAI
 
 Put an API key in `.env.local` as `OPENAI_API_KEY`. Powers:

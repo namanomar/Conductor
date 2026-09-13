@@ -15,6 +15,7 @@ declare global {
 
 interface WorkflowDoc {
   _id: ObjectId;
+  userId: string;
   name: string;
   nodes: WorkflowNode[];
   edges: Edge[];
@@ -33,14 +34,14 @@ async function tick() {
       const db = await getDb();
       const workflow = await db
         .collection<WorkflowDoc>(collections.workflows)
-        .findOne({ _id: new ObjectId(schedule.workflowId) });
+        .findOne({ _id: new ObjectId(schedule.workflowId), userId: schedule.userId });
 
       if (!workflow) {
         await markScheduleRan(schedule._id, schedule.intervalMinutes, "");
         continue;
       }
 
-      const runId = await createRun(`${workflow.name} (scheduled)`, workflow.nodes, workflow.edges);
+      const runId = await createRun(schedule.userId, `${workflow.name} (scheduled)`, workflow.nodes, workflow.edges);
       await markScheduleRan(schedule._id, schedule.intervalMinutes, runId);
 
       executeWorkflow(runId).catch((err) => {

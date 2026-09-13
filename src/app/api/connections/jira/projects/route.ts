@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { resolveConnection } from "@/lib/server/auth-resolve";
+import { requireUserId } from "@/lib/server/current-user";
 
 export async function GET() {
   try {
-    const { jiraAuth } = await resolveConnection("jira");
+    const userId = await requireUserId();
+    const { jiraAuth } = await resolveConnection(userId, "jira");
     if (!jiraAuth) throw new Error("Jira auth not resolved");
     const res = await fetch(`${jiraAuth.baseUrl}/project/search`, {
       headers: { Authorization: jiraAuth.authHeader, Accept: "application/json" },

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createPendingOAuthConnection } from "@/lib/server/custom-connections-store";
+import { requireUserId } from "@/lib/server/current-user";
 import { env } from "@/lib/server/env";
 
 export async function POST(req: Request) {
   try {
+    const userId = await requireUserId();
     const { name, endpoint, authorizeUrl, tokenUrl, clientId, clientSecret, scopes } = await req.json();
 
     if (!name || !endpoint || !authorizeUrl || !tokenUrl || !clientId || !clientSecret) {
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { id, state } = await createPendingOAuthConnection({
+    const { id, state } = await createPendingOAuthConnection(userId, {
       name,
       endpoint,
       authorizeUrl,

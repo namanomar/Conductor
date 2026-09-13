@@ -8,8 +8,8 @@ export interface ResolvedConnection {
   jiraAuth?: JiraAuth;
 }
 
-export async function resolveConnection(app: AppId): Promise<ResolvedConnection> {
-  const doc = await getConnection(app);
+export async function resolveConnection(userId: string, app: AppId): Promise<ResolvedConnection> {
+  const doc = await getConnection(userId, app);
   if (!doc?.connected || !doc.credential) {
     throw new Error(`${app} is not connected — connect it on the Connections page first`);
   }

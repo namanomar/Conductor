@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, Cable, LayoutGrid, Workflow } from "lucide-react";
+import { BookOpen, Cable, LayoutGrid, LogOut, Workflow } from "lucide-react";
 import clsx from "clsx";
 
 const items = [
@@ -14,6 +15,27 @@ const items = [
 
 export function TopBar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.username) setUsername(data.username);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border-soft bg-surface/60 px-5">
@@ -63,6 +85,20 @@ export function TopBar() {
         <BookOpen className="h-4 w-4" />
         Docs
       </Link>
+
+      {username && (
+        <div className="flex items-center gap-2 border-l border-border-soft pl-3">
+          <span className="text-sm text-muted">{username}</span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted transition hover:bg-surface-2/60 hover:text-foreground"
+            title="Log out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </header>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb, collections } from "@/lib/server/mongodb";
+import { requireUserId } from "@/lib/server/current-user";
 import {
   getScheduleForWorkflow,
   upsertSchedule,
@@ -11,8 +12,9 @@ import { startScheduler } from "@/lib/server/scheduler";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await requireUserId();
     const { id } = await params;
-    const schedule = await getScheduleForWorkflow(id);
+    const schedule = await getScheduleForWorkflow(userId, id);
     return NextResponse.json({ schedule });
   } catch (err) {
     return NextResponse.json(
@@ -24,6 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await requireUserId();
     const { id } = await params;
     const { intervalMinutes } = await req.json();
     if (!intervalMinutes || intervalMinutes < 1) {
@@ -31,11 +34,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const db = await getDb();
-    const workflow = await db.collection(collections.workflows).findOne({ _id: new ObjectId(id) });
+    const workflow = await db.collection(collections.workflows).findOne({ _id: new ObjectId(id), userId });
     if (!workflow) return NextResponse.json({ error: "Workflow not found — save it first" }, { status: 404 });
 
     startScheduler();
-    const schedule = await upsertSchedule(id, workflow.name as string, intervalMinutes);
+    const schedule = await upsertSchedule(userId, id, workflow.name as string, intervalMinutes);
     return NextResponse.json({ schedule });
   } catch (err) {
     return NextResponse.json(
@@ -47,10 +50,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await requireUserId();
     const { id } = await params;
     const { enabled } = await req.json();
-    await setScheduleEnabled(id, Boolean(enabled));
-    const schedule = await getScheduleForWorkflow(id);
+    await setScheduleEnabled(userId, id, Boolean(enabled));
+    const schedule = await getScheduleForWorkflow(userId, id);
     return NextResponse.json({ schedule });
   } catch (err) {
     return NextResponse.json(
@@ -62,8 +66,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await requireUserId();
     const { id } = await params;
-    await deleteSchedule(id);
+    await deleteSchedule(userId, id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { resolveConnection } from "@/lib/server/auth-resolve";
+import { requireUserId } from "@/lib/server/current-user";
 
 export async function GET() {
   try {
-    const { token } = await resolveConnection("github");
+    const userId = await requireUserId();
+    const { token } = await resolveConnection(userId, "github");
     const res = await fetch("https://api.github.com/user/repos?sort=updated&per_page=100&affiliation=owner,collaborator", {
       headers: {
         Authorization: `Bearer ${token}`,

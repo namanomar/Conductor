@@ -29,6 +29,7 @@ How to present tool results — this is important:
 const MAX_ITERATIONS = 6;
 
 export async function runChatAgent(
+  userId: string,
   history: { role: "user" | "assistant"; content: string }[],
   emit: (event: ChatEvent) => void
 ) {
@@ -38,7 +39,7 @@ export async function runChatAgent(
     ...history.map((m) => ({ role: m.role, content: m.content }) as ChatCompletionMessageParam),
   ];
 
-  const { tools: dynamicTools, index: dynamicIndex } = await getDynamicMcpTools();
+  const { tools: dynamicTools, index: dynamicIndex } = await getDynamicMcpTools(userId);
   const tools = [...chatTools, ...dynamicTools];
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -74,7 +75,7 @@ export async function runChatAgent(
         ? await callDynamicMcpTool(dynamicIndex, name, args)
             .then((data): ToolCallResult => ({ ok: true, data }))
             .catch((err): ToolCallResult => ({ ok: false, error: err instanceof Error ? err.message : "MCP tool call failed" }))
-        : await executeChatTool(name, args);
+        : await executeChatTool(userId, name, args);
       emit({ type: "tool_done", id: call.id, name, ok: result.ok, data: result.data, error: result.error });
 
       messages.push({

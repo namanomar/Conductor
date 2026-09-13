@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseAppId } from "@/lib/server/app-id";
 import { getConnection, getAccessToken, markSynced } from "@/lib/server/connections-store";
+import { requireUserId } from "@/lib/server/current-user";
 import { getDb, collections } from "@/lib/server/mongodb";
 import { githubSearchRecentPRs } from "@/lib/server/connectors/github";
 import { slackSearchChannel } from "@/lib/server/connectors/slack";
@@ -9,7 +10,8 @@ import { pagerdutyOpenIncidents } from "@/lib/server/connectors/pagerduty";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ app: string }> }) {
   const app = parseAppId((await params).app);
-  const doc = await getConnection(app);
+  const userId = await requireUserId();
+  const doc = await getConnection(userId, app);
 
   if (!doc?.connected || !doc.credential) {
     return NextResponse.json({ error: `${app} is not connected` }, { status: 400 });
@@ -52,14 +54,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ app: s
     if (items.length) {
       const ops = items.map((item) => ({
         updateOne: {
-          filter: { app, externalId: String((item as { id?: unknown; key?: unknown; number?: unknown }).id ?? (item as { key?: unknown }).key ?? (item as { number?: unknown }).number) },
-          update: { $set: { app, data: item, syncedAt: now } },
+          filter: {
+            userId,
+            app,
+            externalId: String((item as { id?: unknown; key?: unknown; number?: unknown }).id ?? (item as { key?: unknown }).key ?? (item as { number?: unknown }).number),
+          },
+          update: { $set: { userId, app, data: item, syncedAt: now } },
           upsert: true,
         },
       }));
       await db.collection(collections.syncedItems).bulkWrite(ops);
     }
-    await markSynced(app);
+    await markSynced(userId, app);
 
     return NextResponse.json({ ok: true, count: items.length, syncedAt: now });
   } catch (err) {

@@ -1,4 +1,5 @@
 import { runChatAgent } from "@/lib/server/chat-agent";
+import { requireUserId } from "@/lib/server/current-user";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +11,13 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: "messages is required" }), { status: 400 });
   }
 
+  let userId: string;
+  try {
+    userId = await requireUserId();
+  } catch {
+    return new Response(JSON.stringify({ error: "Not signed in" }), { status: 401 });
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -18,7 +26,7 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
       };
       try {
-        await runChatAgent(messages, emit);
+        await runChatAgent(userId, messages, emit);
       } catch (err) {
         emit({ type: "error", message: err instanceof Error ? err.message : "Chat failed" });
         emit({ type: "done" });

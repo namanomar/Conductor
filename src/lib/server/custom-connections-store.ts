@@ -13,6 +13,7 @@ export interface CustomOAuthConfig {
 
 export interface CustomConnectionDoc {
   _id: ObjectId;
+  userId: string;
   name: string;
   endpoint: string;
   status: "pending" | "connected";
@@ -43,17 +44,18 @@ function toPublic(doc: CustomConnectionDoc): CustomConnectionPublic {
   };
 }
 
-export async function listCustomConnections(): Promise<CustomConnectionPublic[]> {
+export async function listCustomConnections(userId: string): Promise<CustomConnectionPublic[]> {
   const db = await getDb();
   const docs = await db
     .collection<CustomConnectionDoc>(collections.customConnections)
-    .find({ status: "connected" })
+    .find({ userId, status: "connected" })
     .sort({ createdAt: -1 })
     .toArray();
   return docs.map(toPublic);
 }
 
 export async function createCustomConnection(
+  userId: string,
   name: string,
   endpoint: string,
   token: string,
@@ -61,6 +63,7 @@ export async function createCustomConnection(
 ): Promise<CustomConnectionPublic> {
   const db = await getDb();
   const doc = {
+    userId,
     name,
     endpoint,
     status: "connected" as const,
@@ -72,18 +75,22 @@ export async function createCustomConnection(
   return toPublic({ _id: result.insertedId, ...doc });
 }
 
-export async function createPendingOAuthConnection(config: {
-  name: string;
-  endpoint: string;
-  authorizeUrl: string;
-  tokenUrl: string;
-  clientId: string;
-  clientSecret: string;
-  scopes?: string;
-}): Promise<{ id: string; state: string }> {
+export async function createPendingOAuthConnection(
+  userId: string,
+  config: {
+    name: string;
+    endpoint: string;
+    authorizeUrl: string;
+    tokenUrl: string;
+    clientId: string;
+    clientSecret: string;
+    scopes?: string;
+  }
+): Promise<{ id: string; state: string }> {
   const db = await getDb();
   const state = new ObjectId().toString() + Date.now().toString(36);
   const doc = {
+    userId,
     name: config.name,
     endpoint: config.endpoint,
     status: "pending" as const,
@@ -130,13 +137,13 @@ export async function completeOAuthConnection(
   );
 }
 
-export async function listCustomConnectionCredentials(): Promise<
-  { id: string; name: string; endpoint: string; token: string }[]
-> {
+export async function listCustomConnectionCredentials(
+  userId: string
+): Promise<{ id: string; name: string; endpoint: string; token: string }[]> {
   const db = await getDb();
   const docs = await db
     .collection<CustomConnectionDoc>(collections.customConnections)
-    .find({ status: "connected", accessTokenEnc: { $exists: true } })
+    .find({ userId, status: "connected", accessTokenEnc: { $exists: true } })
     .toArray();
   return docs.map((doc) => ({
     id: doc._id.toString(),
@@ -146,7 +153,7 @@ export async function listCustomConnectionCredentials(): Promise<
   }));
 }
 
-export async function deleteCustomConnection(id: string): Promise<void> {
+export async function deleteCustomConnection(userId: string, id: string): Promise<void> {
   const db = await getDb();
-  await db.collection(collections.customConnections).deleteOne({ _id: new ObjectId(id) });
+  await db.collection(collections.customConnections).deleteOne({ _id: new ObjectId(id), userId });
 }

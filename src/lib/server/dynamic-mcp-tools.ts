@@ -16,13 +16,13 @@ interface DynamicToolEntry extends McpSource {
   toolName: string;
 }
 
-async function getMcpSources(): Promise<McpSource[]> {
+async function getMcpSources(userId: string): Promise<McpSource[]> {
   const sources: McpSource[] = [];
 
-  const builtins = await listConnectionsPublic();
+  const builtins = await listConnectionsPublic(userId);
   for (const c of builtins) {
     if (c.connected && c.mode === "mcp" && c.credentialType === "mcp_token") {
-      const doc = await getConnection(c.id as AppId);
+      const doc = await getConnection(userId, c.id as AppId);
       const token = doc ? getAccessToken(doc) : null;
       if (doc && token) {
         sources.push({
@@ -35,7 +35,7 @@ async function getMcpSources(): Promise<McpSource[]> {
     }
   }
 
-  const customs = await listCustomConnectionCredentials();
+  const customs = await listCustomConnectionCredentials(userId);
   for (const c of customs) {
     sources.push({ sourceId: `custom_${c.id}`, label: c.name, endpoint: c.endpoint, token: c.token });
   }
@@ -52,8 +52,8 @@ export interface DynamicMcpToolset {
   index: Map<string, DynamicToolEntry>;
 }
 
-export async function getDynamicMcpTools(): Promise<DynamicMcpToolset> {
-  const sources = await getMcpSources();
+export async function getDynamicMcpTools(userId: string): Promise<DynamicMcpToolset> {
+  const sources = await getMcpSources(userId);
   const tools: ChatCompletionTool[] = [];
   const index = new Map<string, DynamicToolEntry>();
 
@@ -108,8 +108,8 @@ export interface WorkflowToolNode {
 
 /** Client-safe listing (no tokens) of every MCP tool available to use as a
  * workflow node — from custom connections and any built-in app connected via MCP. */
-export async function listWorkflowToolNodes(): Promise<WorkflowToolNode[]> {
-  const sources = await getMcpSources();
+export async function listWorkflowToolNodes(userId: string): Promise<WorkflowToolNode[]> {
+  const sources = await getMcpSources(userId);
   const nodes: WorkflowToolNode[] = [];
 
   await Promise.all(
@@ -136,8 +136,13 @@ export async function listWorkflowToolNodes(): Promise<WorkflowToolNode[]> {
 }
 
 /** Resolve one MCP source by id (for calling a specific tool node during a run). */
-export async function callMcpSourceTool(sourceId: string, toolName: string, args: Record<string, unknown>) {
-  const sources = await getMcpSources();
+export async function callMcpSourceTool(
+  userId: string,
+  sourceId: string,
+  toolName: string,
+  args: Record<string, unknown>
+) {
+  const sources = await getMcpSources(userId);
   const source = sources.find((s) => s.sourceId === sourceId);
   if (!source) throw new Error(`MCP connection "${sourceId}" is no longer available — reconnect it`);
   return mcpCallTool(source.endpoint, source.token, toolName, args);

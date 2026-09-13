@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
-import { createRun } from "@/lib/server/runs-store";
+import { createRun, listRuns } from "@/lib/server/runs-store";
 import { executeWorkflow } from "@/lib/server/engine";
-import { getDb, collections } from "@/lib/server/mongodb";
+import { requireUserId } from "@/lib/server/current-user";
 
 export async function GET() {
   try {
-    const db = await getDb();
-    const runs = await db
-      .collection(collections.runs)
-      .find({}, { projection: { nodes: 0, edges: 0 } })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .toArray();
+    const userId = await requireUserId();
+    const runs = await listRuns(userId);
     return NextResponse.json({ runs });
   } catch (err) {
     return NextResponse.json(
@@ -23,11 +18,12 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const userId = await requireUserId();
     const body = await req.json();
     if (!Array.isArray(body.nodes) || !Array.isArray(body.edges)) {
       return NextResponse.json({ error: "nodes and edges are required" }, { status: 400 });
     }
-    const id = await createRun(body.name || "Untitled workflow", body.nodes, body.edges);
+    const id = await createRun(userId, body.name || "Untitled workflow", body.nodes, body.edges);
 
     executeWorkflow(id).catch((err) => {
       console.error(`Run ${id} crashed:`, err);

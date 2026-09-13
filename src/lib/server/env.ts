@@ -7,6 +7,7 @@ export const env = {
   mongoUri: () => readEnv("MONGODB_URI"),
   openaiApiKey: () => readEnv("OPENAI_API_KEY"),
   tokenEncryptionKey: () => readEnv("TOKEN_ENCRYPTION_KEY"),
+  sessionSecret: () => readEnv("SESSION_SECRET") || readEnv("TOKEN_ENCRYPTION_KEY"),
 
   github: {
     clientId: () => readEnv("GITHUB_CLIENT_ID"),

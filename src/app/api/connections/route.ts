@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { listConnectionsPublic } from "@/lib/server/connections-store";
+import { requireUserId } from "@/lib/server/current-user";
 import { initialConnections } from "@/lib/connection-defaults";
 
 export async function GET() {
   try {
-    const stored = await listConnectionsPublic();
+    const userId = await requireUserId();
+    const stored = await listConnectionsPublic(userId);
     const byId = new Map(stored.map((c) => [c.id, c]));
     const merged = initialConnections.map((defaults) => {
       const found = byId.get(defaults.id);

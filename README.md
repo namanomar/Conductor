@@ -8,6 +8,8 @@ Conductor is a platform for connecting your team's tools (Slack, GitHub, Jira, P
 
 ---
 
+https://www.loom.com/share/6b13f05dfa9a4e48bec337c0e9bd7aa8
+
 ## The problem
 
 When a production incident fires, an engineer's first ten minutes look the same almost everywhere:
